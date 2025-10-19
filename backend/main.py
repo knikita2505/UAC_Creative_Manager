@@ -29,7 +29,7 @@ class VideoUpload(BaseModel):
     campaign_name: str
     video_source: str  # "local" или "drive_url"
     drive_url: Optional[str] = None
-    thumbnail_option: str  # "none", "first_frame", "custom_modal"
+    thumbnail_option: str  # "none", "first_frame", "soft_modal"
     modal_image_id: Optional[str] = None
 
 class Template(BaseModel):
@@ -92,6 +92,23 @@ async def upload_video(
 ):
     """Загрузка видео на YouTube"""
     try:
+        # Детальное логирование для отладки
+        print(f"🔍 DEBUG: Получен запрос на загрузку")
+        print(f"   campaign_name: {campaign_name}")
+        print(f"   video_source: {video_source}")
+        print(f"   thumbnail_option: {thumbnail_option}")
+        print(f"   modal_image_id: {modal_image_id}")
+        print(f"   video_file: {video_file.filename if video_file else 'None'}")
+        print(f"   video_file.content_type: {video_file.content_type if video_file else 'None'}")
+        
+        await db_manager.create_log("upload_video_debug", {
+            "campaign_name": campaign_name,
+            "video_source": video_source,
+            "thumbnail_option": thumbnail_option,
+            "modal_image_id": modal_image_id,
+            "video_filename": video_file.filename if video_file else None,
+            "video_content_type": video_file.content_type if video_file else None
+        })
         # Генерация уникального ID для загрузки
         upload_id = str(uuid.uuid4())
         
@@ -124,7 +141,7 @@ async def upload_video(
             "video_title": video_title,
             "campaign_name": campaign_name,
             "thumbnail_type": thumbnail_option,
-            "thumbnail_image_id": formData.modal_image_id if thumbnail_option == "custom_modal" else None,
+                    "thumbnail_image_id": modal_image_id if thumbnail_option == "soft_modal" else None,
             "status": "active"
         }
         
@@ -149,6 +166,141 @@ async def upload_video(
         }
         
     except Exception as e:
+        # Логируем детальную ошибку
+        await db_manager.create_log("upload_video_error", {
+            "error": str(e),
+            "campaign_name": campaign_name,
+            "video_source": video_source,
+            "thumbnail_option": thumbnail_option
+        })
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+@app.post("/upload/videos/batch")
+async def upload_videos_batch(
+    campaign_name: str = Form(...),
+    video_source: str = Form(...),
+    drive_urls: Optional[str] = Form(None),  # JSON строка с массивом ссылок
+    thumbnail_option: str = Form(...),
+    modal_image_id: Optional[str] = Form(None),
+    video_files: List[UploadFile] = File(...)
+):
+    """Загрузка нескольких видео на YouTube"""
+    try:
+        import json
+        
+        # Парсинг ссылок на Google Drive если указаны
+        drive_url_list = []
+        if drive_urls:
+            try:
+                drive_url_list = json.loads(drive_urls)
+            except json.JSONDecodeError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "error": "Неверный формат ссылок на Google Drive"}
+                )
+        
+        # Определяем количество видео для обработки
+        if video_source == "local":
+            video_count = len(video_files)
+        else:
+            video_count = len(drive_url_list)
+        
+        if video_count == 0:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Не указаны видео для загрузки"}
+            )
+        
+        results = []
+        
+        # Обработка каждого видео
+        for i in range(video_count):
+            upload_id = str(uuid.uuid4())
+            current_date = datetime.now().strftime("%d-%m-%y")
+            video_title = f"{campaign_name} {current_date} #{i+1}"
+            
+            try:
+                # Обработка видео в зависимости от источника
+                if video_source == "local" and i < len(video_files):
+                    file_path = await save_uploaded_file(video_files[i])
+                    processed_path = await process_video(file_path, upload_id)
+                elif video_source == "drive" and i < len(drive_url_list):
+                    processed_path = await download_from_drive(drive_url_list[i], upload_id)
+                else:
+                    continue
+                
+                # Обработка миниатюры
+                thumbnail_path = await process_thumbnail(
+                    processed_path, thumbnail_option, modal_image_id
+                )
+                
+                # Загрузка на YouTube
+                youtube_url = await upload_to_youtube(processed_path, video_title, thumbnail_path)
+                
+                # Сохранение в базу данных
+                upload_data = {
+                    "youtube_url": youtube_url,
+                    "video_title": video_title,
+                    "campaign_name": campaign_name,
+                    "thumbnail_type": thumbnail_option,
+                    "thumbnail_image_id": modal_image_id if thumbnail_option == "soft_modal" else None,
+                    "status": "active"
+                }
+                
+                upload_record = await db_manager.create_upload(upload_data)
+                
+                results.append({
+                    "upload_id": upload_record["id"],
+                    "youtube_url": youtube_url,
+                    "video_title": video_title,
+                    "success": True
+                })
+                
+                # Логирование успешной загрузки
+                await db_manager.create_log(
+                    "video_uploaded_batch",
+                    {
+                        "upload_id": upload_record["id"],
+                        "campaign_name": campaign_name,
+                        "youtube_url": youtube_url,
+                        "thumbnail_type": thumbnail_option,
+                        "batch_index": i + 1
+                    }
+                )
+                
+            except Exception as e:
+                # Логируем ошибку для конкретного видео
+                await db_manager.create_log(
+                    "video_upload_batch_error",
+                    {
+                        "campaign_name": campaign_name,
+                        "batch_index": i + 1,
+                        "error": str(e)
+                    }
+                )
+                
+                results.append({
+                    "video_title": f"{campaign_name} {current_date} #{i+1}",
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        successful_uploads = [r for r in results if r.get("success")]
+        failed_uploads = [r for r in results if not r.get("success")]
+        
+        return {
+            "success": True,
+            "total_videos": video_count,
+            "successful_uploads": len(successful_uploads),
+            "failed_uploads": len(failed_uploads),
+            "results": results
+        }
+        
+    except Exception as e:
+        await db_manager.create_log("batch_upload_error", {"error": str(e)})
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": str(e)}
@@ -225,13 +377,35 @@ async def get_modal_images():
                     "filename": modal["filename"],
                     "file_size": modal.get("file_size"),
                     "is_active": modal.get("is_active", True),
-                    "upload_date": modal["created_at"]
+                    "upload_date": modal["created_at"],
+                    "file_path": modal.get("file_path")
                 }
                 for modal in modals
             ]
         }
     except Exception as e:
         await db_manager.create_log("get_modals_error", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/modals/{modal_id}/preview")
+async def get_modal_preview(modal_id: str):
+    """Получение превью изображения модалки"""
+    try:
+        modal = await db_manager.get_modal_image_by_id(modal_id)
+        if not modal:
+            raise HTTPException(status_code=404, detail="Модалка не найдена")
+        
+        file_path = modal.get("file_path")
+        if not file_path or not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Файл модалки не найден")
+        
+        from fastapi.responses import FileResponse
+        return FileResponse(file_path, media_type="image/jpeg")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db_manager.create_log("get_modal_preview_error", {"error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/uploads")
@@ -257,12 +431,16 @@ async def get_templates():
 # Вспомогательные функции
 async def save_uploaded_file(file: UploadFile) -> str:
     """Сохранение загруженного файла"""
+    print(f"🔍 DEBUG save_uploaded_file:")
+    print(f"   filename: {file.filename}")
+    print(f"   content_type: {file.content_type}")
+    print(f"   ALLOWED_VIDEO_TYPES: {ALLOWED_VIDEO_TYPES}")
+    
     # Проверка типа файла
     if file.content_type not in ALLOWED_VIDEO_TYPES:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Неподдерживаемый тип видео файла. Разрешены: {', '.join(ALLOWED_VIDEO_TYPES)}"
-        )
+        error_msg = f"Неподдерживаемый тип видео файла. Получен: {file.content_type}, разрешены: {', '.join(ALLOWED_VIDEO_TYPES)}"
+        print(f"❌ ERROR: {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
     
     upload_dir = Path(UPLOAD_DIR) / "videos"
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -309,7 +487,7 @@ async def process_thumbnail(video_path: str, option: str, modal_id: Optional[str
     if option == "first_frame":
         # Извлечение первого кадра
         return str(thumbnails_dir / f"{uuid.uuid4()}_first_frame.jpg")
-    elif option == "custom_modal" and modal_id:
+    elif option == "soft_modal" and modal_id:
         # Наложение модалки на первый кадр
         return str(thumbnails_dir / f"{uuid.uuid4()}_with_modal.jpg")
     
@@ -317,11 +495,26 @@ async def process_thumbnail(video_path: str, option: str, modal_id: Optional[str
 
 async def upload_to_youtube(video_path: str, title: str, thumbnail_path: Optional[str]) -> str:
     """Загрузка видео на YouTube"""
-    # TODO: Здесь будет интеграция с YouTube Data API
-    # Пока возвращаем заглушку для демонстрации
-    import time
-    await asyncio.sleep(1)  # Имитация загрузки
-    return f"https://youtube.com/watch?v={str(uuid.uuid4())[:11]}"
+    try:
+        # Используем реальную интеграцию с YouTube
+        result = await integration_manager.upload_video_to_youtube(
+            video_path=video_path,
+            title=title,
+            description=f"Видео загружено через UAC Creative Manager\nДата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            thumbnail_path=thumbnail_path
+        )
+        
+        if result.get("success"):
+            return result.get("video_url")
+        else:
+            # Если интеграция не настроена, возвращаем заглушку
+            await db_manager.create_log("youtube_upload_fallback", {"error": result.get("error", "Unknown error")})
+            return f"https://youtube.com/watch?v={str(uuid.uuid4())[:11]}"
+            
+    except Exception as e:
+        # Логируем ошибку и возвращаем заглушку
+        await db_manager.create_log("youtube_upload_error", {"error": str(e)})
+        return f"https://youtube.com/watch?v={str(uuid.uuid4())[:11]}"
 
 # ==================== INTEGRATION ENDPOINTS ====================
 

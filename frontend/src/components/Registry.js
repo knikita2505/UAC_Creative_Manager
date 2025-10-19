@@ -177,6 +177,28 @@ const Registry = () => {
           </div>
         </div>
 
+        {/* Дополнительная статистика */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600">
+              {uploads.filter(u => u.thumbnail_type === 'soft_modal').length}
+            </div>
+            <div className="text-sm text-purple-800">С кастомными миниатюрами</div>
+          </div>
+          <div className="bg-indigo-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-indigo-600">
+              {uploads.filter(u => u.thumbnail_type === 'first_frame').length}
+            </div>
+            <div className="text-sm text-indigo-800">С первым кадром</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-gray-600">
+              {uploads.filter(u => u.thumbnail_type === 'none').length}
+            </div>
+            <div className="text-sm text-gray-800">Без изменений миниатюры</div>
+          </div>
+        </div>
+
         {/* Таблица загрузок */}
         {filteredUploads.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -205,6 +227,9 @@ const Registry = () => {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Дата загрузки
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Миниатюра
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Ad Group
@@ -243,6 +268,25 @@ const Registry = () => {
                       <div className="flex items-center">
                         <Calendar className="w-4 h-4 mr-1" />
                         {formatDate(upload.upload_date)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex items-center">
+                        {upload.thumbnail_type === 'soft_modal' && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            Кастомная
+                          </span>
+                        )}
+                        {upload.thumbnail_type === 'first_frame' && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                            Первый кадр
+                          </span>
+                        )}
+                        {upload.thumbnail_type === 'none' && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Без изменений
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
