@@ -81,10 +81,16 @@ UAC_Creative_Manager/
 
 ## 🔧 Настройка
 
+### 1. Supabase (Обязательно)
+1. Получите API ключи из [Supabase Dashboard](https://supabase.com/dashboard)
+2. Выполните SQL скрипты из `backend/sql/`
+3. Обновите `backend/config.py` с вашими ключами
+4. Подробнее см. [SUPABASE_SETUP.md](SUPABASE_SETUP.md)
+
+### 2. Дополнительные интеграции (Опционально)
 1. **Google OAuth2**: Настройте OAuth2 в Google Cloud Console
 2. **Telegram Bot**: Создайте бота через @BotFather
-3. **Supabase**: Настройте проект в Supabase
-4. **YouTube API**: Включите YouTube Data API v3
+3. **YouTube API**: Включите YouTube Data API v3
 
 ## 📝 API Endpoints
 

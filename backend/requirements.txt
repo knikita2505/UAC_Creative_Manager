@@ -6,14 +6,24 @@ pydantic==2.5.0
 python-dotenv==1.0.0
 requests>=2.25.0
 pillow>=9.0.0
+supabase>=2.0.0
+psycopg2-binary>=2.9.0
 
-# Google API packages (will be added later when integrating)
-# google-auth
-# google-auth-oauthlib
-# google-auth-httplib2
-# google-api-python-client
-# googleads
+# Google API packages
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.0.0
 
-# Video processing (optional - can be installed later)
-# opencv-python>=4.5.0
-# ffmpeg-python>=0.2.0
+# YouTube API
+google-api-python-client[extra]>=2.0.0
+
+# Telegram Bot API
+python-telegram-bot>=20.0
+
+# Google Ads API (optional - can cause conflicts)
+# googleads>=30.0.0
+
+# Video processing
+opencv-python>=4.5.0
+ffmpeg-python>=0.2.0
