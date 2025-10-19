@@ -1,0 +1,183 @@
+# ===========================================
+# UAC Creative Manager - .gitignore
+# ===========================================
+
+# ===========================================
+# Python / Backend
+# ===========================================
+# Виртуальные окружения
+backend/venv/
+backend/env/
+backend/.venv/
+backend/.env/
+venv/
+env/
+.venv/
+.env/
+
+# Python кэш
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ===========================================
+# Node.js / Frontend
+# ===========================================
+# Node.js зависимости
+frontend/node_modules/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Сборка React
+frontend/build/
+frontend/dist/
+build/
+dist/
+
+# ===========================================
+# Пользовательские файлы (НЕ коммитим!)
+# ===========================================
+# Загруженные пользователями файлы
+backend/uploads/
+backend/downloaded/
+backend/processed/
+backend/thumbnails/
+uploads/
+downloads/
+processed/
+thumbnails/
+
+# ===========================================
+# Системные файлы
+# ===========================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ===========================================
+# IDE и редакторы
+# ===========================================
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ===========================================
+# Логи и временные файлы
+# ===========================================
+*.log
+logs/
+*.tmp
+*.temp
+.cache/
+
+# ===========================================
+# Конфигурационные файлы с секретами
+# ===========================================
+# НЕ коммитим файлы с секретами
+backend/config.env
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ===========================================
+# Docker
+# ===========================================
+# Docker volumes и кэш
+.dockerignore
+
+# ===========================================
+# База данных
+# ===========================================
+# Локальные файлы БД
+*.db
+*.sqlite
+*.sqlite3
+
+# ===========================================
+# Тестирование
+# ===========================================
+# Покрытие кода
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# ===========================================
+# Документация (опционально)
+# ===========================================
+# Если не хотите коммитить документацию
+# *.md
+# !README.md
+
+# ===========================================
+# Специфичные для проекта
+# ===========================================
+# Временные файлы обработки видео
+*.mp4.tmp
+*.avi.tmp
+*.mov.tmp
+
+# Кэш API
+api_cache/
+cache/
+
+# Резервные копии
+*.bak
+*.backup
