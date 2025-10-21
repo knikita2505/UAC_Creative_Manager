@@ -116,9 +116,11 @@ async def upload_video(
         
         # Обработка видео в зависимости от источника
         print(f"🔧 Начинаем обработку видео...")
+        original_filename = None
         if video_source == "local" and video_file:
             # Обработка локального файла
             print(f"📁 Сохранение загруженного файла...")
+            original_filename = video_file.filename
             file_path = await save_uploaded_file(video_file)
             print(f"✅ Файл сохранен: {file_path}")
             
@@ -128,6 +130,7 @@ async def upload_video(
         elif video_source == "drive" and drive_url:
             # Скачивание из Google Drive
             print(f"☁️ Скачивание из Google Drive...")
+            original_filename = drive_url.split('/')[-1]  # Берем последнюю часть URL
             processed_path = await download_from_drive(drive_url, upload_id)
             print(f"✅ Видео скачано: {processed_path}")
         else:
@@ -197,13 +200,17 @@ async def upload_video(
             
             upload_record = await db_manager.create_upload(upload_data)
             
+            # Убираем расширение из имени файла для группы
+            group_name = original_filename.rsplit('.', 1)[0] if original_filename else f"{campaign_name} #{video_data['copy_number']}"
+            
             upload_results.append({
                 "upload_id": upload_record["id"],
                 "youtube_url": youtube_url,
                 "video_title": video_title,
                 "orientation": video_data["orientation"],
                 "copy_number": video_data["copy_number"],
-                "group_name": f"{campaign_name} {datetime.now().strftime('%d.%m.%y')} #{video_data['copy_number']}"
+                "group_name": group_name,
+                "original_filename": original_filename
             })
             
             # Логирование успешной загрузки
@@ -300,10 +307,13 @@ async def upload_videos_batch(
             
             try:
                 # Обработка видео в зависимости от источника
+                original_filename = None
                 if video_source == "local" and i < len(video_files):
+                    original_filename = video_files[i].filename
                     file_path = await save_uploaded_file(video_files[i])
                     processed_path = await process_video(file_path, upload_id)
                 elif video_source == "drive" and i < len(drive_url_list):
+                    original_filename = drive_url_list[i].split('/')[-1]
                     processed_path = await download_from_drive(drive_url_list[i], upload_id)
                 else:
                     continue
@@ -364,13 +374,17 @@ async def upload_videos_batch(
                     
                     upload_record = await db_manager.create_upload(upload_data)
                     
+                    # Убираем расширение из имени файла для группы
+                    group_name = original_filename.rsplit('.', 1)[0] if original_filename else f"{campaign_name} #{video_data['copy_number']}"
+                    
                     results.append({
                         "upload_id": upload_record["id"],
                         "youtube_url": youtube_url,
                         "video_title": video_title,
                         "orientation": video_data["orientation"],
                         "copy_number": video_data["copy_number"],
-                        "group_name": f"{campaign_name} {datetime.now().strftime('%d.%m.%y')} #{video_data['copy_number']}",
+                        "group_name": group_name,
+                        "original_filename": original_filename,
                         "success": True
                     })
                     

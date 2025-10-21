@@ -123,7 +123,8 @@ const VideoUpload = () => {
       if (response.data.success) {
         setUploadResult(response.data);
         if (uploadedFiles.length > 1) {
-          toast.success(`Успешно загружено ${response.data.successful_uploads} из ${response.data.total_videos} видео!`);
+          const totalFormats = response.data.total_formats || response.data.successful_uploads;
+          toast.success(`Успешно загружено ${response.data.successful_uploads} видео (${totalFormats} форматов) из ${response.data.total_videos} исходных!`);
         } else {
           toast.success('Видео успешно загружено на YouTube!');
         }
@@ -358,27 +359,36 @@ const VideoUpload = () => {
                           <span className="text-sm text-gray-600">({videos.length} формат{videos.length > 1 ? (videos.length > 4 ? 'ов' : 'а') : ''})</span>
                         </summary>
                         <div className="p-3 space-y-2">
-                          {videos.map((result, index) => (
-                            <div key={index} className="p-2 bg-green-50 rounded border border-green-200">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium text-sm">{result.video_title}</span>
-                                <CheckCircle className="w-4 h-4 text-green-600" />
+                          {videos.map((result, index) => {
+                            const orientationMap = {
+                              'horizontal': 'Landscape',
+                              'vertical': 'Portrait',
+                              'square': 'Square'
+                            };
+                            const orientationEn = orientationMap[result.orientation] || result.orientation;
+                            
+                            return (
+                              <div key={index} className="p-2 bg-green-50 rounded border border-green-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium text-sm">{result.video_title}</span>
+                                  <CheckCircle className="w-4 h-4 text-green-600" />
+                                </div>
+                                {result.orientation && (
+                                  <p className="text-xs text-gray-600 mt-1">Ориентация: {orientationEn}</p>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(result.youtube_url);
+                                    toast.success('Ссылка скопирована в буфер обмена');
+                                  }}
+                                  className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
+                                >
+                                  <Copy className="w-3 h-3 mr-1" />
+                                  Копировать ссылку
+                                </button>
                               </div>
-                              {result.orientation && (
-                                <p className="text-xs text-gray-600 mt-1">Ориентация: {result.orientation}</p>
-                              )}
-                              <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(result.youtube_url);
-                                  toast.success('Ссылка скопирована в буфер обмена');
-                                }}
-                                className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
-                              >
-                                <Copy className="w-3 h-3 mr-1" />
-                                Копировать ссылку
-                              </button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </details>
                     ))}
@@ -420,25 +430,34 @@ const VideoUpload = () => {
                           <span className="text-sm text-gray-600">({videos.length} формат{videos.length > 1 ? 'а' : ''})</span>
                         </summary>
                         <div className="p-3 space-y-2">
-                          {videos.map((video, index) => (
-                            <div key={index} className="p-2 bg-green-50 rounded border border-green-200">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium text-sm">{video.video_title}</span>
-                                <CheckCircle className="w-4 h-4 text-green-600" />
+                          {videos.map((video, index) => {
+                            const orientationMap = {
+                              'horizontal': 'Landscape',
+                              'vertical': 'Portrait',
+                              'square': 'Square'
+                            };
+                            const orientationEn = orientationMap[video.orientation] || video.orientation;
+                            
+                            return (
+                              <div key={index} className="p-2 bg-green-50 rounded border border-green-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium text-sm">{video.video_title}</span>
+                                  <CheckCircle className="w-4 h-4 text-green-600" />
+                                </div>
+                                <p className="text-xs text-gray-600 mt-1">Ориентация: {orientationEn}</p>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(video.youtube_url);
+                                    toast.success('Ссылка скопирована в буфер обмена');
+                                  }}
+                                  className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
+                                >
+                                  <Copy className="w-3 h-3 mr-1" />
+                                  Копировать ссылку
+                                </button>
                               </div>
-                              <p className="text-xs text-gray-600 mt-1">Ориентация: {video.orientation}</p>
-                              <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(video.youtube_url);
-                                  toast.success('Ссылка скопирована в буфер обмена');
-                                }}
-                                className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
-                              >
-                                <Copy className="w-3 h-3 mr-1" />
-                                Копировать ссылку
-                              </button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </details>
                     ))}
