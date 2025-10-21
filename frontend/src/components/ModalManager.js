@@ -169,9 +169,19 @@ const ModalManager = () => {
                   </div>
 
                   {/* Превью изображения */}
-                  <div className="mt-3 bg-gray-100 rounded-lg p-4 text-center">
-                    <Image className="w-8 h-8 mx-auto text-gray-400" />
-                    <p className="text-xs text-gray-500 mt-1">Превью</p>
+                  <div className="mt-3 bg-gray-100 rounded-lg overflow-hidden">
+                    <img
+                      src={`http://localhost:8000/modals/${modal.id}/preview`}
+                      alt={modal.filename}
+                      className="w-full h-32 object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div className="hidden h-32 items-center justify-center">
+                      <Image className="w-8 h-8 text-gray-400" />
+                    </div>
                   </div>
                 </div>
               ))}
