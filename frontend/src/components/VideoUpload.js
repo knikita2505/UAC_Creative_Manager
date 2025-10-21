@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, Link, Image, CheckCircle, AlertCircle, Copy } from 'lucide-react';
+import { Upload, Link, Image, CheckCircle, AlertCircle, Copy, HelpCircle } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -157,10 +157,16 @@ const VideoUpload = () => {
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Название кампании */}
+          {/* Прилка */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Название кампании *
+            <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
+              <span>Прилка *</span>
+              <div className="relative group ml-1">
+                <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
+                  Название приложения, которое будет использоваться в названиях видео
+                </div>
+              </div>
             </label>
             <input
               type="text"
@@ -168,18 +174,21 @@ const VideoUpload = () => {
               value={formData.campaign_name}
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Введите название кампании"
+              placeholder="Например: MasterSwiper"
               required
             />
-            <p className="text-sm text-gray-500 mt-1">
-              Название видео будет: "{formData.campaign_name || 'Название кампании'} {new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })}"
-            </p>
           </div>
 
           {/* Источник видео */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Источник видео *
+            <label className="flex items-center text-sm font-medium text-gray-700 mb-3">
+              <span>Источник видео *</span>
+              <div className="relative group ml-1">
+                <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
+                  Выберите откуда загружать видео: с вашего устройства или по ссылке из Google Drive
+                </div>
+              </div>
             </label>
             <div className="space-y-3">
               <label className="flex items-center">
@@ -242,9 +251,6 @@ const VideoUpload = () => {
                         ? 'Отпустите файлы здесь'
                         : 'Перетащите видео файлы сюда или нажмите для выбора'}
                     </p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Поддерживаемые форматы: MP4, AVI, MOV, MKV, WebM
-                    </p>
                   </div>
                 )}
               </div>
@@ -262,122 +268,8 @@ const VideoUpload = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="https://drive.google.com/file/d/...&#10;https://drive.google.com/file/d/...&#10;https://drive.google.com/file/d/..."
               />
-              <p className="text-sm text-gray-500 mt-1">
-                Введите ссылки на видео в Google Drive, по одной на строку
-              </p>
             </div>
           )}
-
-          {/* Настройки миниатюры */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Настройки миниатюры
-            </label>
-            <div className="space-y-3">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="thumbnail_option"
-                  value="none"
-                  checked={formData.thumbnail_option === 'none'}
-                  onChange={handleInputChange}
-                  className="mr-3"
-                />
-                <span>Не изменять миниатюру</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="thumbnail_option"
-                  value="first_frame"
-                  checked={formData.thumbnail_option === 'first_frame'}
-                  onChange={handleInputChange}
-                  className="mr-3"
-                />
-                <span>Поставить первый кадр видео</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="thumbnail_option"
-                  value="soft_modal"
-                  checked={formData.thumbnail_option === 'soft_modal'}
-                  onChange={handleInputChange}
-                  className="mr-3"
-                />
-                <span>Создать кастомную миниатюру с модалкой</span>
-              </label>
-            </div>
-
-            {/* Выбор модалки */}
-            {formData.thumbnail_option === 'soft_modal' && (
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Выберите модалку
-                </label>
-                {modalImages.length > 0 ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {modalImages.map((modal) => (
-                      <div
-                        key={modal.id}
-                        className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
-                          formData.modal_image_id === modal.id
-                            ? 'border-primary-500 bg-primary-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            modal_image_id: modal.id
-                          }));
-                          setSelectedModal(modal);
-                        }}
-                      >
-                        <div className="aspect-square bg-gray-100 rounded-md mb-2 overflow-hidden">
-                          <img
-                            src={`http://localhost:8000/modals/${modal.id}/preview`}
-                            alt={modal.filename}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                          <div className="hidden w-full h-full items-center justify-center">
-                            <Image className="w-8 h-8 text-gray-400" />
-                          </div>
-                        </div>
-                        <div className="text-sm font-medium text-gray-900 truncate">
-                          {modal.filename}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {modal.file_size ? `${(modal.file_size / 1024).toFixed(1)} KB` : 'Размер неизвестен'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
-                    <Image className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="font-medium">Модалки не загружены</p>
-                    <p className="text-sm">Перейдите в раздел "Модалки" для загрузки изображений</p>
-                  </div>
-                )}
-                
-                {/* Показываем выбранную модалку */}
-                {selectedModal && (
-                  <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
-                    <div className="flex items-center">
-                      <CheckCircle className="w-5 h-5 text-primary-600 mr-2" />
-                      <span className="text-sm font-medium text-primary-800">
-                        Выбрана модалка: {selectedModal.filename}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
           {/* Создание других форматов */}
           <div className="border-t pt-4">
@@ -392,19 +284,20 @@ const VideoUpload = () => {
                 }))}
                 className="mt-1 mr-3"
               />
-              <div>
+              <div className="flex items-center">
                 <span className="font-medium text-gray-900">Создать для видео недостающие форматы</span>
-                <p className="text-sm text-gray-600 mt-1">
-                  Система автоматически создаст видео в других ориентациях с черными полосами:
-                </p>
-                <ul className="text-sm text-gray-600 mt-1 ml-4 list-disc">
-                  <li>Квадратное (1:1) → Горизонтальное (16:9) + Вертикальное (9:16)</li>
-                  <li>Горизонтальное (16:9) → Квадратное (1:1) + Вертикальное (9:16)</li>
-                  <li>Вертикальное (9:16) → Квадратное (1:1) + Горизонтальное (16:9)</li>
-                </ul>
-                <p className="text-sm text-gray-500 mt-2 italic">
-                  Каждое видео будет иметь название: "Кампания + Ориентация + Дата + Номер копии"
-                </p>
+                <div className="relative group ml-1">
+                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-80 p-3 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
+                    <p className="mb-2">Система создаст видео в других ориентациях с черными полосами:</p>
+                    <ul className="list-disc ml-4 space-y-1">
+                      <li>Квадратное (1:1) → Горизонтальное (16:9) + Вертикальное (9:16)</li>
+                      <li>Горизонтальное (16:9) → Квадратное (1:1) + Вертикальное (9:16)</li>
+                      <li>Вертикальное (9:16) → Квадратное (1:1) + Горизонтальное (16:9)</li>
+                    </ul>
+                    <p className="mt-2 italic opacity-75">⚠️ Работает корректно только с квадратными видео!</p>
+                  </div>
+                </div>
               </div>
             </label>
           </div>
@@ -438,69 +331,116 @@ const VideoUpload = () => {
               </h3>
             </div>
             <div className="mt-2 text-sm text-green-700">
-              {uploadResult.total_videos > 1 ? (
+              {uploadResult.total_videos > 1 || uploadResult.results ? (
                 <div>
-                  <p><strong>Всего видео:</strong> {uploadResult.total_videos}</p>
-                  <p><strong>Успешно загружено:</strong> {uploadResult.successful_uploads}</p>
-                  <p><strong>Ошибок:</strong> {uploadResult.failed_uploads}</p>
+                  <p><strong>Исходных видео:</strong> {uploadResult.total_videos}</p>
+                  <p><strong>Успешно загружено групп:</strong> {uploadResult.successful_uploads}</p>
+                  {uploadResult.total_formats && (
+                    <p><strong>Всего форматов:</strong> {uploadResult.total_formats}</p>
+                  )}
+                  {uploadResult.failed_uploads > 0 && (
+                    <p><strong>Ошибок:</strong> {uploadResult.failed_uploads}</p>
+                  )}
                   
-                  {/* Детали по каждому видео */}
-                  <div className="mt-3 space-y-2">
-                    {uploadResult.results.map((result, index) => (
-                      <div key={index} className={`p-2 rounded ${
-                        result.success ? 'bg-green-100' : 'bg-red-100'
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{result.video_title}</span>
-                          {result.success ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <AlertCircle className="w-4 h-4 text-red-600" />
-                          )}
+                  {/* Группировка по copy_number */}
+                  <div className="mt-3 space-y-3">
+                    {Object.entries(
+                      uploadResult.results.filter(r => r.success).reduce((groups, result) => {
+                        const groupKey = result.group_name || `Видео #${result.copy_number || 'unknown'}`;
+                        if (!groups[groupKey]) groups[groupKey] = [];
+                        groups[groupKey].push(result);
+                        return groups;
+                      }, {})
+                    ).map(([groupName, videos]) => (
+                      <details key={groupName} className="border rounded-lg" open={Object.keys(uploadResult.results.filter(r => r.success).reduce((g, v) => ({...g, [v.group_name || `Видео #${v.copy_number}`]: 1}), {})).length === 1}>
+                        <summary className="cursor-pointer p-3 bg-primary-50 hover:bg-primary-100 rounded-t-lg font-medium flex items-center justify-between">
+                          <span>{groupName}</span>
+                          <span className="text-sm text-gray-600">({videos.length} формат{videos.length > 1 ? (videos.length > 4 ? 'ов' : 'а') : ''})</span>
+                        </summary>
+                        <div className="p-3 space-y-2">
+                          {videos.map((result, index) => (
+                            <div key={index} className="p-2 bg-green-50 rounded border border-green-200">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-sm">{result.video_title}</span>
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                              </div>
+                              {result.orientation && (
+                                <p className="text-xs text-gray-600 mt-1">Ориентация: {result.orientation}</p>
+                              )}
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(result.youtube_url);
+                                  toast.success('Ссылка скопирована в буфер обмена');
+                                }}
+                                className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
+                              >
+                                <Copy className="w-3 h-3 mr-1" />
+                                Копировать ссылку
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                        {result.success && result.youtube_url && (
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(result.youtube_url);
-                              toast.success('Ссылка скопирована в буфер обмена');
-                            }}
-                            className="flex items-center text-primary-600 hover:text-primary-800 text-xs"
-                          >
-                            <Copy className="w-3 h-3 mr-1" />
-                            Копировать ссылку
-                          </button>
-                        )}
-                        {!result.success && result.error && (
-                          <p className="text-red-600 text-xs mt-1">Ошибка: {result.error}</p>
-                        )}
-                      </div>
+                      </details>
                     ))}
                   </div>
+                  
+                  {/* Ошибки */}
+                  {uploadResult.results.filter(r => !r.success).length > 0 && (
+                    <div className="mt-3">
+                      <p className="font-medium text-red-600 mb-2">Ошибки:</p>
+                      {uploadResult.results.filter(r => !r.success).map((result, index) => (
+                        <div key={index} className="p-2 bg-red-100 rounded mb-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{result.video_title}</span>
+                            <AlertCircle className="w-4 h-4 text-red-600" />
+                          </div>
+                          <p className="text-red-600 text-xs mt-1">Ошибка: {result.error}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : uploadResult.videos ? (
                 <div>
                   <p><strong>Всего загружено форматов:</strong> {uploadResult.total_uploaded}</p>
                   
-                  {/* Детали по каждому формату */}
-                  <div className="mt-3 space-y-2">
-                    {uploadResult.videos.map((video, index) => (
-                      <div key={index} className="p-2 bg-green-100 rounded">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{video.video_title}</span>
-                          <CheckCircle className="w-4 h-4 text-green-600" />
+                  {/* Группировка по copy_number */}
+                  <div className="mt-3 space-y-3">
+                    {Object.entries(
+                      uploadResult.videos.reduce((groups, video) => {
+                        const groupKey = video.group_name || `Group ${video.copy_number}`;
+                        if (!groups[groupKey]) groups[groupKey] = [];
+                        groups[groupKey].push(video);
+                        return groups;
+                      }, {})
+                    ).map(([groupName, videos]) => (
+                      <details key={groupName} className="border rounded-lg" open={Object.keys(uploadResult.videos.reduce((g, v) => ({...g, [v.group_name]: 1}), {})).length === 1}>
+                        <summary className="cursor-pointer p-3 bg-primary-50 hover:bg-primary-100 rounded-t-lg font-medium flex items-center justify-between">
+                          <span>{groupName}</span>
+                          <span className="text-sm text-gray-600">({videos.length} формат{videos.length > 1 ? 'а' : ''})</span>
+                        </summary>
+                        <div className="p-3 space-y-2">
+                          {videos.map((video, index) => (
+                            <div key={index} className="p-2 bg-green-50 rounded border border-green-200">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-sm">{video.video_title}</span>
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                              </div>
+                              <p className="text-xs text-gray-600 mt-1">Ориентация: {video.orientation}</p>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(video.youtube_url);
+                                  toast.success('Ссылка скопирована в буфер обмена');
+                                }}
+                                className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
+                              >
+                                <Copy className="w-3 h-3 mr-1" />
+                                Копировать ссылку
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-xs text-gray-600 mt-1">Ориентация: {video.orientation}</p>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(video.youtube_url);
-                            toast.success('Ссылка скопирована в буфер обмена');
-                          }}
-                          className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
-                        >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Копировать ссылку
-                        </button>
-                      </div>
+                      </details>
                     ))}
                   </div>
                 </div>

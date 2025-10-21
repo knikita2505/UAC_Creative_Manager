@@ -139,12 +139,15 @@ async def upload_video(
         orientation = await get_video_orientation(processed_path)
         print(f"✅ Ориентация видео: {orientation}")
         
+        # Номер копии (для одиночной загрузки всегда 1)
+        video_copy_number = 1
+        
         # Список видео для загрузки (основное + другие форматы)
         videos_to_upload = [
             {
                 "path": processed_path,
                 "orientation": orientation,
-                "copy_number": 1
+                "copy_number": video_copy_number
             }
         ]
         
@@ -153,12 +156,12 @@ async def upload_video(
             print(f"🎬 Создание других форматов видео...")
             other_formats = await create_other_formats(processed_path, upload_id, orientation)
             
-            # Добавляем созданные форматы в список для загрузки
-            for i, fmt in enumerate(other_formats, start=2):
+            # Добавляем созданные форматы с тем же номером копии
+            for fmt in other_formats:
                 videos_to_upload.append({
                     "path": fmt["path"],
                     "orientation": fmt["orientation"],
-                    "copy_number": i
+                    "copy_number": video_copy_number  # Тот же номер для всех форматов
                 })
         
         # Загружаем все видео на YouTube
@@ -198,7 +201,9 @@ async def upload_video(
                 "upload_id": upload_record["id"],
                 "youtube_url": youtube_url,
                 "video_title": video_title,
-                "orientation": video_data["orientation"]
+                "orientation": video_data["orientation"],
+                "copy_number": video_data["copy_number"],
+                "group_name": f"{campaign_name} {datetime.now().strftime('%d.%m.%y')} #{video_data['copy_number']}"
             })
             
             # Логирование успешной загрузки
@@ -306,12 +311,15 @@ async def upload_videos_batch(
                 # Определяем ориентацию видео
                 orientation = await get_video_orientation(processed_path)
                 
+                # Номер копии для текущего видео (i+1)
+                video_copy_number = i + 1
+                
                 # Список видео для загрузки (основное + другие форматы)
                 videos_to_upload = [
                     {
                         "path": processed_path,
                         "orientation": orientation,
-                        "copy_number": 1
+                        "copy_number": video_copy_number
                     }
                 ]
                 
@@ -319,11 +327,12 @@ async def upload_videos_batch(
                 if create_formats:
                     other_formats = await create_other_formats(processed_path, upload_id, orientation)
                     
-                    for j, fmt in enumerate(other_formats, start=2):
+                    # Добавляем форматы с тем же номером копии
+                    for fmt in other_formats:
                         videos_to_upload.append({
                             "path": fmt["path"],
                             "orientation": fmt["orientation"],
-                            "copy_number": j
+                            "copy_number": video_copy_number  # Тот же номер для всех форматов
                         })
                 
                 # Загружаем все видео
@@ -360,6 +369,8 @@ async def upload_videos_batch(
                         "youtube_url": youtube_url,
                         "video_title": video_title,
                         "orientation": video_data["orientation"],
+                        "copy_number": video_data["copy_number"],
+                        "group_name": f"{campaign_name} {datetime.now().strftime('%d.%m.%y')} #{video_data['copy_number']}",
                         "success": True
                     })
                     
@@ -396,10 +407,14 @@ async def upload_videos_batch(
         successful_uploads = [r for r in results if r.get("success")]
         failed_uploads = [r for r in results if not r.get("success")]
         
+        # Считаем уникальные группы (по copy_number)
+        unique_groups = set(r.get("copy_number") for r in successful_uploads if r.get("copy_number"))
+        
         return {
             "success": True,
-            "total_videos": video_count,
-            "successful_uploads": len(successful_uploads),
+            "total_videos": video_count,  # Количество исходных видео
+            "successful_uploads": len(unique_groups),  # Количество успешных групп
+            "total_formats": len(successful_uploads),  # Общее количество загруженных форматов
             "failed_uploads": len(failed_uploads),
             "results": results
         }
@@ -720,24 +735,21 @@ async def create_other_formats(video_path: str, base_upload_id: str, orientation
     return created_formats
 
 def generate_video_title(campaign_name: str, orientation: str, copy_number: int = 1) -> str:
-    """Генерация названия видео: кампания + ориентация + дата + номер"""
+    """Генерация названия видео: кампания + ориентация (англ) + дата + #номер"""
     from datetime import datetime
     
-    # Переводим ориентацию на русский
-    orientation_ru = {
-        "horizontal": "Горизонтальное",
-        "vertical": "Вертикальное",
-        "square": "Квадратное"
-    }.get(orientation, orientation)
+    # Ориентация на английском
+    orientation_en = {
+        "horizontal": "Landscape",
+        "vertical": "Portrait",
+        "square": "Square"
+    }.get(orientation, orientation.capitalize())
     
-    # Формат даты: ДД.ММ.ГГГГ
-    date_str = datetime.now().strftime("%d.%m.%Y")
+    # Формат даты: ДД.ММ.ГГ
+    date_str = datetime.now().strftime("%d.%m.%y")
     
-    # Формируем название
-    title = f"{campaign_name} {orientation_ru} {date_str}"
-    
-    if copy_number > 1:
-        title += f" Копия {copy_number}"
+    # Формируем название: "Название Ориентация Дата #Номер"
+    title = f"{campaign_name} {orientation_en} {date_str} #{copy_number}"
     
     return title
 
