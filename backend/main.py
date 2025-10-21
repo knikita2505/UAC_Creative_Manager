@@ -454,18 +454,58 @@ async def save_uploaded_file(file: UploadFile) -> str:
 
 async def process_video(file_path: str, upload_id: str) -> str:
     """Обработка видео: очистка метаданных и уникализация"""
-    # Здесь будет логика очистки метаданных через exiftool/ffmpeg
-    # и легкая уникализация (изменение длительности, битрейта, FPS)
+    import subprocess
+    import random
+    
     processed_dir = Path(UPLOAD_DIR) / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     
     processed_path = processed_dir / f"{upload_id}_processed.mp4"
     
-    # Заглушка - простое копирование
-    import shutil
-    shutil.copy2(file_path, processed_path)
-    
-    return str(processed_path)
+    try:
+        # Очистка метаданных и легкая уникализация через ffmpeg
+        # Небольшие изменения для уникализации
+        bitrate_variation = random.randint(-100, 100)  # ±100 kbps
+        fps_variation = random.uniform(0.95, 1.05)  # ±5% FPS
+        
+        ffmpeg_cmd = [
+            'ffmpeg', '-i', file_path,
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            '-b:v', f'{1000 + bitrate_variation}k',  # Базовый битрейт с вариацией
+            '-r', f'{30 * fps_variation:.2f}',  # Базовый FPS с вариацией
+            '-map_metadata', '-1',  # Удаление всех метаданных
+            '-metadata', 'title=',
+            '-metadata', 'artist=',
+            '-metadata', 'album=',
+            '-metadata', 'date=',
+            '-metadata', 'comment=',
+            '-y',  # Перезаписать файл
+            str(processed_path)
+        ]
+        
+        print(f"🔧 Обработка видео: {file_path}")
+        print(f"   Команда ffmpeg: {' '.join(ffmpeg_cmd)}")
+        
+        # Выполняем обработку
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print(f"✅ Видео обработано: {processed_path}")
+            return str(processed_path)
+        else:
+            print(f"⚠️ Ошибка ffmpeg, используем оригинал: {result.stderr}")
+            # Если ffmpeg не работает, копируем оригинал
+            import shutil
+            shutil.copy2(file_path, processed_path)
+            return str(processed_path)
+            
+    except Exception as e:
+        print(f"⚠️ Ошибка обработки видео: {e}")
+        # Fallback - простое копирование
+        import shutil
+        shutil.copy2(file_path, processed_path)
+        return str(processed_path)
 
 async def download_from_drive(drive_url: str, upload_id: str) -> str:
     """Скачивание видео из Google Drive"""
@@ -478,18 +518,121 @@ async def download_from_drive(drive_url: str, upload_id: str) -> str:
 
 async def process_thumbnail(video_path: str, option: str, modal_id: Optional[str]) -> Optional[str]:
     """Обработка миниатюры"""
+    import subprocess
+    from PIL import Image, ImageDraw, ImageFont
+    import os
+    
     if option == "none":
         return None
     
     thumbnails_dir = Path(UPLOAD_DIR) / "thumbnails"
     thumbnails_dir.mkdir(parents=True, exist_ok=True)
     
-    if option == "first_frame":
-        # Извлечение первого кадра
-        return str(thumbnails_dir / f"{uuid.uuid4()}_first_frame.jpg")
-    elif option == "soft_modal" and modal_id:
-        # Наложение модалки на первый кадр
-        return str(thumbnails_dir / f"{uuid.uuid4()}_with_modal.jpg")
+    try:
+        if option == "first_frame":
+            # Извлечение первого кадра
+            thumbnail_path = thumbnails_dir / f"{uuid.uuid4()}_first_frame.jpg"
+            
+            ffmpeg_cmd = [
+                'ffmpeg', '-i', video_path,
+                '-ss', '00:00:00.1',  # 100 миллисекунд от начала
+                '-vframes', '1',      # Один кадр
+                '-q:v', '2',          # Высокое качество
+                '-y',
+                str(thumbnail_path)
+            ]
+            
+            print(f"🖼️ Извлечение первого кадра: {video_path}")
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"✅ Первый кадр извлечен: {thumbnail_path}")
+                return str(thumbnail_path)
+            else:
+                print(f"⚠️ Ошибка извлечения кадра: {result.stderr}")
+                return None
+                
+        elif option == "soft_modal" and modal_id:
+            # Наложение модалки на первый кадр
+            thumbnail_path = thumbnails_dir / f"{uuid.uuid4()}_with_modal.jpg"
+            
+            # Сначала извлекаем первый кадр
+            temp_frame = thumbnails_dir / f"temp_frame_{uuid.uuid4()}.jpg"
+            ffmpeg_cmd = [
+                'ffmpeg', '-i', video_path,
+                '-ss', '00:00:00.1',  # 100 миллисекунд от начала
+                '-vframes', '1',
+                '-q:v', '2',
+                '-y',
+                str(temp_frame)
+            ]
+            
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"⚠️ Ошибка извлечения кадра для модалки: {result.stderr}")
+                return None
+            
+            # Получаем путь к модалке из базы данных
+            modal_data = await db_manager.get_modal_image_by_id(modal_id)
+            if not modal_data or not modal_data.get("file_path"):
+                print(f"⚠️ Модалка не найдена: {modal_id}")
+                return None
+            
+            modal_path = modal_data["file_path"]
+            
+            # Накладываем модалку на кадр
+            try:
+                # Открываем изображения
+                frame_img = Image.open(temp_frame)
+                modal_img = Image.open(modal_path)
+                
+                print(f"🖼️ Размер кадра: {frame_img.size}")
+                print(f"🖼️ Размер модалки: {modal_img.size}")
+                
+                # Изменяем размер модалки под размер кадра
+                modal_img = modal_img.resize(frame_img.size, Image.Resampling.LANCZOS)
+                
+                # Конвертируем в RGBA для работы с прозрачностью
+                if frame_img.mode != 'RGBA':
+                    frame_img = frame_img.convert('RGBA')
+                if modal_img.mode != 'RGBA':
+                    modal_img = modal_img.convert('RGBA')
+                
+                # Создаем новый RGBA изображение
+                composite = Image.new('RGBA', frame_img.size)
+                
+                # Сначала накладываем кадр
+                composite.paste(frame_img, (0, 0))
+                
+                # Затем накладываем модалку с прозрачностью
+                # Устанавливаем альфа-канал модалки на 128 (50% прозрачности)
+                modal_with_alpha = modal_img.copy()
+                modal_with_alpha.putalpha(128)
+                
+                # Накладываем модалку
+                composite.paste(modal_with_alpha, (0, 0), modal_with_alpha)
+                
+                # Конвертируем обратно в RGB для сохранения
+                composite_rgb = composite.convert('RGB')
+                
+                # Сохраняем результат
+                composite_rgb.save(thumbnail_path, 'JPEG', quality=95)
+                
+                # Удаляем временный файл
+                if temp_frame.exists():
+                    temp_frame.unlink()
+                
+                print(f"✅ Миниатюра с модалкой создана: {thumbnail_path}")
+                print(f"🖼️ Файл сохранен: {thumbnail_path.exists()}")
+                return str(thumbnail_path)
+                
+            except Exception as e:
+                print(f"⚠️ Ошибка создания миниатюры с модалкой: {e}")
+                return None
+    
+    except Exception as e:
+        print(f"⚠️ Общая ошибка обработки миниатюры: {e}")
+        return None
     
     return None
 

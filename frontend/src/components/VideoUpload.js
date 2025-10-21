@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, Link, Image, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, Link, Image, CheckCircle, AlertCircle, Copy } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -426,14 +426,16 @@ const VideoUpload = () => {
                           )}
                         </div>
                         {result.success && result.youtube_url && (
-                          <a 
-                            href={result.youtube_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-primary-600 hover:text-primary-800 text-xs"
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(result.youtube_url);
+                              toast.success('Ссылка скопирована в буфер обмена');
+                            }}
+                            className="flex items-center text-primary-600 hover:text-primary-800 text-xs"
                           >
-                            Открыть на YouTube
-                          </a>
+                            <Copy className="w-3 h-3 mr-1" />
+                            Копировать ссылку
+                          </button>
                         )}
                         {!result.success && result.error && (
                           <p className="text-red-600 text-xs mt-1">Ошибка: {result.error}</p>
@@ -447,14 +449,16 @@ const VideoUpload = () => {
                   <p><strong>ID загрузки:</strong> {uploadResult.upload_id}</p>
                   <p><strong>Название видео:</strong> {uploadResult.video_title}</p>
                   <p><strong>Ссылка на YouTube:</strong> 
-                    <a 
-                      href={uploadResult.youtube_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary-600 hover:text-primary-800 ml-1"
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(uploadResult.youtube_url);
+                        toast.success('Ссылка скопирована в буфер обмена');
+                      }}
+                      className="flex items-center text-primary-600 hover:text-primary-800 ml-2"
                     >
-                      {uploadResult.youtube_url}
-                    </a>
+                      <Copy className="w-4 h-4 mr-1" />
+                      Копировать ссылку
+                    </button>
                   </p>
                 </div>
               )}

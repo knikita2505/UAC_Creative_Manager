@@ -3,6 +3,7 @@
 """
 import asyncio
 import json
+import os
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import httpx
@@ -221,7 +222,9 @@ class IntegrationManager:
                     'categoryId': '22'  # People & Blogs
                 },
                 'status': {
-                    'privacyStatus': 'private'  # Начнем с приватного
+                    'privacyStatus': 'unlisted',  # Unlisted вместо private
+                    'madeForKids': False,  # Видео не для детей
+                    'selfDeclaredMadeForKids': False
                 }
             }
             
@@ -236,6 +239,19 @@ class IntegrationManager:
             response = media_body.execute()
             video_id = response['id']
             video_url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Загрузка миниатюры, если она создана
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                try:
+                    print(f"🖼️ Загрузка миниатюры: {thumbnail_path}")
+                    service.thumbnails().set(
+                        videoId=video_id,
+                        media_body=thumbnail_path
+                    ).execute()
+                    print(f"✅ Миниатюра загружена для видео {video_id}")
+                except Exception as e:
+                    print(f"⚠️ Ошибка загрузки миниатюры: {e}")
+                    # Продолжаем без миниатюры
             
             await db_manager.create_log(
                 "video_uploaded_to_youtube",
