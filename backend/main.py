@@ -31,6 +31,7 @@ class VideoUpload(BaseModel):
     drive_url: Optional[str] = None
     thumbnail_option: str  # "none", "first_frame", "soft_modal"
     modal_image_id: Optional[str] = None
+    create_formats: bool = False  # Создавать ли другие форматы
 
 class Template(BaseModel):
     id: str
@@ -88,6 +89,7 @@ async def upload_video(
     drive_url: Optional[str] = Form(None),
     thumbnail_option: str = Form(...),
     modal_image_id: Optional[str] = Form(None),
+    create_formats: bool = Form(False),
     video_file: Optional[UploadFile] = File(None)
 ):
     """Загрузка видео на YouTube"""
@@ -112,70 +114,140 @@ async def upload_video(
         # Генерация уникального ID для загрузки
         upload_id = str(uuid.uuid4())
         
-        # Создание названия видео: название кампании + дата
-        current_date = datetime.now().strftime("%d-%m-%y")
-        video_title = f"{campaign_name} {current_date}"
-        
         # Обработка видео в зависимости от источника
+        print(f"🔧 Начинаем обработку видео...")
         if video_source == "local" and video_file:
             # Обработка локального файла
+            print(f"📁 Сохранение загруженного файла...")
             file_path = await save_uploaded_file(video_file)
+            print(f"✅ Файл сохранен: {file_path}")
+            
+            print(f"🔧 Обработка видео (очистка метаданных и уникализация)...")
             processed_path = await process_video(file_path, upload_id)
+            print(f"✅ Видео обработано: {processed_path}")
         elif video_source == "drive" and drive_url:
             # Скачивание из Google Drive
+            print(f"☁️ Скачивание из Google Drive...")
             processed_path = await download_from_drive(drive_url, upload_id)
+            print(f"✅ Видео скачано: {processed_path}")
         else:
+            print(f"❌ Неверные параметры загрузки")
             raise HTTPException(status_code=400, detail="Неверные параметры загрузки")
         
-        # Обработка миниатюры
-        thumbnail_path = await process_thumbnail(
-            processed_path, thumbnail_option, modal_image_id
-        )
+        # Определяем ориентацию видео
+        print(f"📐 Определение ориентации видео...")
+        orientation = await get_video_orientation(processed_path)
+        print(f"✅ Ориентация видео: {orientation}")
         
-        # Загрузка на YouTube (заглушка)
-        youtube_url = await upload_to_youtube(processed_path, video_title, thumbnail_path)
-        
-        # Сохранение в базу данных
-        upload_data = {
-            "youtube_url": youtube_url,
-            "video_title": video_title,
-            "campaign_name": campaign_name,
-            "thumbnail_type": thumbnail_option,
-                    "thumbnail_image_id": modal_image_id if thumbnail_option == "soft_modal" else None,
-            "status": "active"
-        }
-        
-        upload_record = await db_manager.create_upload(upload_data)
-        
-        # Логирование успешной загрузки
-        await db_manager.create_log(
-            "video_uploaded",
+        # Список видео для загрузки (основное + другие форматы)
+        videos_to_upload = [
             {
-                "upload_id": upload_record["id"],
-                "campaign_name": campaign_name,
-                "youtube_url": youtube_url,
-                "thumbnail_type": thumbnail_option
+                "path": processed_path,
+                "orientation": orientation,
+                "copy_number": 1
             }
-        )
+        ]
         
-        return {
-            "success": True,
-            "upload_id": upload_record["id"],
-            "youtube_url": youtube_url,
-            "video_title": video_title
-        }
+        # Создаем другие форматы если выбрана опция
+        if create_formats:
+            print(f"🎬 Создание других форматов видео...")
+            other_formats = await create_other_formats(processed_path, upload_id, orientation)
+            
+            # Добавляем созданные форматы в список для загрузки
+            for i, fmt in enumerate(other_formats, start=2):
+                videos_to_upload.append({
+                    "path": fmt["path"],
+                    "orientation": fmt["orientation"],
+                    "copy_number": i
+                })
+        
+        # Загружаем все видео на YouTube
+        upload_results = []
+        
+        for video_data in videos_to_upload:
+            # Генерируем название для каждого видео
+            video_title = generate_video_title(
+                campaign_name,
+                video_data["orientation"],
+                video_data["copy_number"]
+            )
+            
+            print(f"📤 Загрузка: {video_title}")
+            
+            # Обработка миниатюры
+            thumbnail_path = await process_thumbnail(
+                video_data["path"], thumbnail_option, modal_image_id
+            )
+            
+            # Загрузка на YouTube
+            youtube_url = await upload_to_youtube(video_data["path"], video_title, thumbnail_path)
+            
+            # Сохранение в базу данных
+            upload_data = {
+                "youtube_url": youtube_url,
+                "video_title": video_title,
+                "campaign_name": campaign_name,
+                "thumbnail_type": thumbnail_option,
+                "thumbnail_image_id": modal_image_id if thumbnail_option == "soft_modal" else None,
+                "status": "active"
+            }
+            
+            upload_record = await db_manager.create_upload(upload_data)
+            
+            upload_results.append({
+                "upload_id": upload_record["id"],
+                "youtube_url": youtube_url,
+                "video_title": video_title,
+                "orientation": video_data["orientation"]
+            })
+            
+            # Логирование успешной загрузки
+            await db_manager.create_log(
+                "video_uploaded",
+                {
+                    "upload_id": upload_record["id"],
+                    "campaign_name": campaign_name,
+                    "youtube_url": youtube_url,
+                    "thumbnail_type": thumbnail_option,
+                    "orientation": video_data["orientation"]
+                }
+            )
+        
+        # Возвращаем результаты
+        if len(upload_results) == 1:
+            # Одно видео - возвращаем простой формат
+            return {
+                "success": True,
+                **upload_results[0]
+            }
+        else:
+            # Несколько видео - возвращаем массив
+            return {
+                "success": True,
+                "videos": upload_results,
+                "total_uploaded": len(upload_results)
+            }
         
     except Exception as e:
-        # Логируем детальную ошибку
+        # Логируем детальную ошибку с полным стектрейсом
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"❌ ОШИБКА при загрузке видео:")
+        print(f"   Тип ошибки: {type(e).__name__}")
+        print(f"   Сообщение: {str(e)}")
+        print(f"   Стектрейс:\n{error_traceback}")
+        
         await db_manager.create_log("upload_video_error", {
             "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": error_traceback,
             "campaign_name": campaign_name,
             "video_source": video_source,
             "thumbnail_option": thumbnail_option
         })
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": str(e)}
+            content={"success": False, "error": str(e), "error_type": type(e).__name__}
         )
 
 @app.post("/upload/videos/batch")
@@ -185,6 +257,7 @@ async def upload_videos_batch(
     drive_urls: Optional[str] = Form(None),  # JSON строка с массивом ссылок
     thumbnail_option: str = Form(...),
     modal_image_id: Optional[str] = Form(None),
+    create_formats: bool = Form(False),
     video_files: List[UploadFile] = File(...)
 ):
     """Загрузка нескольких видео на YouTube"""
@@ -219,8 +292,6 @@ async def upload_videos_batch(
         # Обработка каждого видео
         for i in range(video_count):
             upload_id = str(uuid.uuid4())
-            current_date = datetime.now().strftime("%d-%m-%y")
-            video_title = f"{campaign_name} {current_date} #{i+1}"
             
             try:
                 # Обработка видео в зависимости от источника
@@ -232,44 +303,78 @@ async def upload_videos_batch(
                 else:
                     continue
                 
-                # Обработка миниатюры
-                thumbnail_path = await process_thumbnail(
-                    processed_path, thumbnail_option, modal_image_id
-                )
+                # Определяем ориентацию видео
+                orientation = await get_video_orientation(processed_path)
                 
-                # Загрузка на YouTube
-                youtube_url = await upload_to_youtube(processed_path, video_title, thumbnail_path)
-                
-                # Сохранение в базу данных
-                upload_data = {
-                    "youtube_url": youtube_url,
-                    "video_title": video_title,
-                    "campaign_name": campaign_name,
-                    "thumbnail_type": thumbnail_option,
-                    "thumbnail_image_id": modal_image_id if thumbnail_option == "soft_modal" else None,
-                    "status": "active"
-                }
-                
-                upload_record = await db_manager.create_upload(upload_data)
-                
-                results.append({
-                    "upload_id": upload_record["id"],
-                    "youtube_url": youtube_url,
-                    "video_title": video_title,
-                    "success": True
-                })
-                
-                # Логирование успешной загрузки
-                await db_manager.create_log(
-                    "video_uploaded_batch",
+                # Список видео для загрузки (основное + другие форматы)
+                videos_to_upload = [
                     {
-                        "upload_id": upload_record["id"],
-                        "campaign_name": campaign_name,
-                        "youtube_url": youtube_url,
-                        "thumbnail_type": thumbnail_option,
-                        "batch_index": i + 1
+                        "path": processed_path,
+                        "orientation": orientation,
+                        "copy_number": 1
                     }
-                )
+                ]
+                
+                # Создаем другие форматы если выбрана опция
+                if create_formats:
+                    other_formats = await create_other_formats(processed_path, upload_id, orientation)
+                    
+                    for j, fmt in enumerate(other_formats, start=2):
+                        videos_to_upload.append({
+                            "path": fmt["path"],
+                            "orientation": fmt["orientation"],
+                            "copy_number": j
+                        })
+                
+                # Загружаем все видео
+                for video_data in videos_to_upload:
+                    # Генерируем название
+                    video_title = generate_video_title(
+                        campaign_name,
+                        video_data["orientation"],
+                        video_data["copy_number"]
+                    )
+                    
+                    # Обработка миниатюры
+                    thumbnail_path = await process_thumbnail(
+                        video_data["path"], thumbnail_option, modal_image_id
+                    )
+                    
+                    # Загрузка на YouTube
+                    youtube_url = await upload_to_youtube(video_data["path"], video_title, thumbnail_path)
+                    
+                    # Сохранение в базу данных
+                    upload_data = {
+                        "youtube_url": youtube_url,
+                        "video_title": video_title,
+                        "campaign_name": campaign_name,
+                        "thumbnail_type": thumbnail_option,
+                        "thumbnail_image_id": modal_image_id if thumbnail_option == "soft_modal" else None,
+                        "status": "active"
+                    }
+                    
+                    upload_record = await db_manager.create_upload(upload_data)
+                    
+                    results.append({
+                        "upload_id": upload_record["id"],
+                        "youtube_url": youtube_url,
+                        "video_title": video_title,
+                        "orientation": video_data["orientation"],
+                        "success": True
+                    })
+                    
+                    # Логирование успешной загрузки
+                    await db_manager.create_log(
+                        "video_uploaded_batch",
+                        {
+                            "upload_id": upload_record["id"],
+                            "campaign_name": campaign_name,
+                            "youtube_url": youtube_url,
+                            "thumbnail_type": thumbnail_option,
+                            "orientation": video_data["orientation"],
+                            "batch_index": i + 1
+                        }
+                    )
                 
             except Exception as e:
                 # Логируем ошибку для конкретного видео
@@ -283,7 +388,7 @@ async def upload_videos_batch(
                 )
                 
                 results.append({
-                    "video_title": f"{campaign_name} {current_date} #{i+1}",
+                    "video_title": f"{campaign_name} Видео #{i+1}",
                     "success": False,
                     "error": str(e)
                 })
@@ -506,6 +611,135 @@ async def process_video(file_path: str, upload_id: str) -> str:
         import shutil
         shutil.copy2(file_path, processed_path)
         return str(processed_path)
+
+async def get_video_orientation(video_path: str) -> str:
+    """Определение ориентации видео"""
+    import subprocess
+    import json
+    
+    try:
+        # Получаем информацию о видео через ffprobe
+        ffprobe_cmd = [
+            'ffprobe', '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_streams',
+            video_path
+        ]
+        
+        result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            video_stream = next((s for s in data['streams'] if s['codec_type'] == 'video'), None)
+            
+            if video_stream:
+                width = int(video_stream['width'])
+                height = int(video_stream['height'])
+                
+                print(f"📐 Размеры видео: {width}x{height}")
+                
+                # Определяем ориентацию
+                if width > height:
+                    return "horizontal"  # 16:9
+                elif height > width:
+                    return "vertical"    # 9:16
+                else:
+                    return "square"      # 1:1
+        
+        # По умолчанию считаем горизонтальным
+        return "horizontal"
+        
+    except Exception as e:
+        print(f"⚠️ Ошибка определения ориентации: {e}")
+        return "horizontal"
+
+async def create_other_formats(video_path: str, base_upload_id: str, orientation: str) -> List[dict]:
+    """Создание других форматов видео с черными полосами"""
+    import subprocess
+    
+    formats_dir = Path(UPLOAD_DIR) / "formats"
+    formats_dir.mkdir(parents=True, exist_ok=True)
+    
+    created_formats = []
+    
+    # Определяем какие форматы нужно создать
+    formats_to_create = []
+    if orientation == "square":
+        formats_to_create = [
+            {"name": "vertical", "width": 720, "height": 1280, "aspect": "9:16"},
+            {"name": "horizontal", "width": 1280, "height": 720, "aspect": "16:9"}
+        ]
+    elif orientation == "horizontal":
+        formats_to_create = [
+            {"name": "square", "width": 720, "height": 720, "aspect": "1:1"},
+            {"name": "vertical", "width": 720, "height": 1280, "aspect": "9:16"}
+        ]
+    elif orientation == "vertical":
+        formats_to_create = [
+            {"name": "square", "width": 720, "height": 720, "aspect": "1:1"},
+            {"name": "horizontal", "width": 1280, "height": 720, "aspect": "16:9"}
+        ]
+    
+    print(f"🎬 Создание форматов для {orientation} видео: {[f['name'] for f in formats_to_create]}")
+    
+    for fmt in formats_to_create:
+        try:
+            output_path = formats_dir / f"{base_upload_id}_{fmt['name']}.mp4"
+            
+            # Создаем видео с черными полосами (letterbox/pillarbox)
+            # scale: масштабирование с сохранением пропорций
+            # pad: добавление черных полос
+            ffmpeg_cmd = [
+                'ffmpeg', '-i', video_path,
+                '-vf', f"scale={fmt['width']}:{fmt['height']}:force_original_aspect_ratio=decrease,pad={fmt['width']}:{fmt['height']}:(ow-iw)/2:(oh-ih)/2:black",
+                '-c:v', 'libx264',
+                '-c:a', 'aac',
+                '-b:v', '1000k',
+                '-b:a', '128k',
+                '-y',
+                str(output_path)
+            ]
+            
+            print(f"   🔧 Создание {fmt['name']} формата ({fmt['width']}x{fmt['height']})...")
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"   ✅ {fmt['name'].capitalize()} формат создан: {output_path}")
+                created_formats.append({
+                    "orientation": fmt['name'],
+                    "path": str(output_path),
+                    "resolution": f"{fmt['width']}x{fmt['height']}",
+                    "aspect": fmt['aspect']
+                })
+            else:
+                print(f"   ⚠️ Ошибка создания {fmt['name']} формата: {result.stderr}")
+                
+        except Exception as e:
+            print(f"   ⚠️ Ошибка создания {fmt['name']} формата: {e}")
+    
+    return created_formats
+
+def generate_video_title(campaign_name: str, orientation: str, copy_number: int = 1) -> str:
+    """Генерация названия видео: кампания + ориентация + дата + номер"""
+    from datetime import datetime
+    
+    # Переводим ориентацию на русский
+    orientation_ru = {
+        "horizontal": "Горизонтальное",
+        "vertical": "Вертикальное",
+        "square": "Квадратное"
+    }.get(orientation, orientation)
+    
+    # Формат даты: ДД.ММ.ГГГГ
+    date_str = datetime.now().strftime("%d.%m.%Y")
+    
+    # Формируем название
+    title = f"{campaign_name} {orientation_ru} {date_str}"
+    
+    if copy_number > 1:
+        title += f" Копия {copy_number}"
+    
+    return title
 
 async def download_from_drive(drive_url: str, upload_id: str) -> str:
     """Скачивание видео из Google Drive"""

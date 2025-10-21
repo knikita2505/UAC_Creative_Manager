@@ -10,7 +10,8 @@ const VideoUpload = () => {
     video_source: 'local',
     drive_urls: '',
     thumbnail_option: 'none',
-    modal_image_id: null
+    modal_image_id: null,
+    create_formats: false
   });
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -89,6 +90,7 @@ const VideoUpload = () => {
       submitData.append('campaign_name', formData.campaign_name);
       submitData.append('video_source', formData.video_source);
       submitData.append('thumbnail_option', formData.thumbnail_option);
+      submitData.append('create_formats', formData.create_formats);
       
       if (formData.video_source === 'drive') {
         // Парсим ссылки и отправляем как JSON
@@ -131,7 +133,8 @@ const VideoUpload = () => {
           video_source: 'local',
           drive_urls: '',
           thumbnail_option: 'none',
-          modal_image_id: null
+          modal_image_id: null,
+          create_formats: false
         });
         setUploadedFiles([]);
         setSelectedModal(null);
@@ -376,6 +379,36 @@ const VideoUpload = () => {
             )}
           </div>
 
+          {/* Создание других форматов */}
+          <div className="border-t pt-4">
+            <label className="flex items-start">
+              <input
+                type="checkbox"
+                name="create_formats"
+                checked={formData.create_formats}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  create_formats: e.target.checked
+                }))}
+                className="mt-1 mr-3"
+              />
+              <div>
+                <span className="font-medium text-gray-900">Создать для видео недостающие форматы</span>
+                <p className="text-sm text-gray-600 mt-1">
+                  Система автоматически создаст видео в других ориентациях с черными полосами:
+                </p>
+                <ul className="text-sm text-gray-600 mt-1 ml-4 list-disc">
+                  <li>Квадратное (1:1) → Горизонтальное (16:9) + Вертикальное (9:16)</li>
+                  <li>Горизонтальное (16:9) → Квадратное (1:1) + Вертикальное (9:16)</li>
+                  <li>Вертикальное (9:16) → Квадратное (1:1) + Горизонтальное (16:9)</li>
+                </ul>
+                <p className="text-sm text-gray-500 mt-2 italic">
+                  Каждое видео будет иметь название: "Кампания + Ориентация + Дата + Номер копии"
+                </p>
+              </div>
+            </label>
+          </div>
+
           {/* Кнопка загрузки */}
           <div className="flex justify-end">
             <button
@@ -440,6 +473,33 @@ const VideoUpload = () => {
                         {!result.success && result.error && (
                           <p className="text-red-600 text-xs mt-1">Ошибка: {result.error}</p>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : uploadResult.videos ? (
+                <div>
+                  <p><strong>Всего загружено форматов:</strong> {uploadResult.total_uploaded}</p>
+                  
+                  {/* Детали по каждому формату */}
+                  <div className="mt-3 space-y-2">
+                    {uploadResult.videos.map((video, index) => (
+                      <div key={index} className="p-2 bg-green-100 rounded">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{video.video_title}</span>
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">Ориентация: {video.orientation}</p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(video.youtube_url);
+                            toast.success('Ссылка скопирована в буфер обмена');
+                          }}
+                          className="flex items-center text-primary-600 hover:text-primary-800 text-xs mt-1"
+                        >
+                          <Copy className="w-3 h-3 mr-1" />
+                          Копировать ссылку
+                        </button>
                       </div>
                     ))}
                   </div>
